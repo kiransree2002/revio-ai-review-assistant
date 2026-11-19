@@ -7,6 +7,9 @@ from src.sentiment import train_sentiment_model, analyze_sentiment
 from src.topic_classifier import classify_topic
 from src.priority import detect_priority
 from src.response_generator import generate_response
+from src.database import seed_demo_data, get_reviews_by_business
+from src.customer_form import render_customer_review_form
+from src.login import render_login_page, logout_employee
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -469,9 +472,33 @@ def analyze_review(review):
         "Suggested Response": response
     }
 
+# Ensure demo business and employee are seeded
+seed_demo_data()
+
+# Page routing: Customer review submission vs. Employee dashboard
+# Supports URL query params: ?page=submit_review&biz=<business-id>
+query_params = st.query_params
+active_page = query_params.get("page", "dashboard")
+biz_param = query_params.get("biz", "demo-corp")
+
+if active_page == "submit_review":
+    render_customer_review_form(business_id=biz_param, model=model)
+    st.stop()
+
+# Protect Employee Dashboard: require authentication in session_state
+if not st.session_state.get("authenticated", False):
+    render_login_page()
+    st.stop()
+
+# Retrieve securely authenticated session variables
+auth_username = st.session_state.get("username", "Employee")
+auth_business_id = st.session_state.get("business_id", "demo-corp")
+auth_business_name = st.session_state.get("business_name", "Business")
+auth_role = st.session_state.get("role", "employee")
+
 # Polished Sidebar
 with st.sidebar:
-    st.markdown("""
+    st.markdown(f"""
     <div class="sidebar-brand">
         <div style="display:flex; align-items:center; gap:10px;">
             <div style="background: linear-gradient(135deg, #7C3AED, #38BDF8); border-radius:10px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);">⚡</div>
@@ -480,19 +507,41 @@ with st.sidebar:
                 <p>Intelligence Platform</p>
             </div>
         </div>
+        <div style="margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-size: 0.72rem; color: #94A3B8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Active Workspace</div>
+            <div style="font-size: 0.88rem; color: #F8FAFC; font-weight: 700; margin-top: 2px;">{auth_business_name}</div>
+            <div style="font-size: 0.75rem; color: #64748B;">User: <span style="color:#A78BFA; font-weight:600;">{auth_username}</span> ({auth_role})</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:8px;'>Data Source & Ingestion</p>", unsafe_allow_html=True)
+    if st.button("🚪 Sign Out", use_container_width=True):
+        logout_employee()
+
+    st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-top:16px; margin-bottom:8px;'>Data Source & Ingestion</p>", unsafe_allow_html=True)
     input_method = st.radio(
         "Choose input method",
-        ["Sample Dataset", "Upload CSV", "Enter Review"],
+        ["Live Business Reviews", "Sample Dataset", "Upload CSV", "Enter Review"],
         label_visibility="collapsed"
     )
 
     st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
 
-    if input_method == "Sample Dataset":
+    if input_method == "Live Business Reviews":
+        db_records = get_reviews_by_business(auth_business_id)
+        if db_records:
+            df = pd.DataFrame(db_records)
+            # Normalize column names for downstream analysis
+            if "review_text" in df.columns and "review" not in df.columns:
+                df["review"] = df["review_text"]
+            if "id" in df.columns and "review_id" not in df.columns:
+                df["review_id"] = df["id"]
+            st.success(f"📊 Connected to live database for **{auth_business_name}** ({len(df)} reviews).")
+        else:
+            st.info(f"ℹ️ No customer reviews submitted yet for **{auth_business_name}**.")
+            df = pd.DataFrame()
+
+    elif input_method == "Sample Dataset":
         st.info("📊 Using built-in verified sample dataset with multi-topic customer reviews.")
         df = pd.read_csv("data/sample_reviews.csv")
 
@@ -505,7 +554,19 @@ with st.sidebar:
         )
 
         if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
+            try:
+                # Security hardening: validate file size, encoding and CSV structure
+                if uploaded_file.size > 20 * 1024 * 1024:
+                    st.error("Uploaded file exceeds 20MB limit.")
+                    df = pd.DataFrame()
+                else:
+                    df = pd.read_csv(uploaded_file, nrows=5000)
+                    if "review" not in df.columns:
+                        st.error("Invalid CSV structure: CSV must contain a 'review' column.")
+                        df = pd.DataFrame()
+            except Exception as e:
+                st.error(f"Error parsing CSV file: {str(e)}")
+                df = pd.DataFrame()
         else:
             df = pd.DataFrame()
 
@@ -521,12 +582,16 @@ with st.sidebar:
         analyze_clicked = st.button("✨ Analyze Review", use_container_width=True)
         df = pd.DataFrame()
 
-    st.markdown("""
+    st.markdown(f"""
     <div style='margin-top: 40px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);'>
         <div style='font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;'>Active Architecture</div>
         <div style='font-size: 0.8rem; color: #CBD5E1; margin-top: 4px;'>• TF-IDF + Logistic Regression</div>
         <div style='font-size: 0.8rem; color: #CBD5E1;'>• Rule-Based Topic Extraction</div>
         <div style='font-size: 0.8rem; color: #CBD5E1;'>• Heuristic Priority Scorer</div>
+    </div>
+    <div style='margin-top: 14px; padding: 12px; border-radius: 12px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25); text-align: center;'>
+        <div style='font-size: 0.72rem; color: #C4B5FD; text-transform: uppercase; font-weight: 700;'>Public Customer Form</div>
+        <a href='?page=submit_review&biz={auth_business_id}' target='_blank' style='font-size: 0.82rem; color: #38BDF8; font-weight: 600; text-decoration: none; display: block; margin-top: 4px;'>🔗 Open Review Widget</a>
     </div>
     """, unsafe_allow_html=True)
 
@@ -544,15 +609,19 @@ st.markdown("""
 
 # Single review analysis display
 if input_method == "Enter Review" and 'analyze_clicked' in locals() and analyze_clicked:
-    if review_text.strip():
-        result = analyze_review(review_text)
+    clean_single_review = review_text.strip() if review_text else ""
+    if clean_single_review:
+        if len(clean_single_review) > 5000:
+            st.error("Review text exceeds the 5,000 character analysis limit.")
+        else:
+            result = analyze_review(clean_single_review)
 
-        st.markdown("""
-        <div class="section-header">
-            <span class="section-icon">🔍</span>
-            <h3 class="section-title">Individual Review Intelligence</h3>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown("""
+            <div class="section-header">
+                <span class="section-icon">🔍</span>
+                <h3 class="section-title">Individual Review Intelligence</h3>
+            </div>
+            """, unsafe_allow_html=True)
 
         sent_badge_class = "badge-pos" if result["Sentiment"] == "positive" else ("badge-neu" if result["Sentiment"] == "neutral" else "badge-neg")
         prio_badge_class = "badge-high" if result["Priority"] == "High" else ("badge-medium" if result["Priority"] == "Medium" else "badge-low")
