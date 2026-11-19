@@ -1,7 +1,7 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from src.sentiment import train_sentiment_model, analyze_sentiment
 from src.topic_classifier import classify_topic
@@ -14,30 +14,376 @@ from sklearn.metrics import (
     f1_score,
     confusion_matrix
 )
+
 # Page configuration
 st.set_page_config(
-    page_title="Revio AI | Review Intelligence",
-    page_icon="⭐",
-    layout="wide"
+    page_title="Revio AI | Intelligent Review Analysis & Resolution",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Title
-st.title("⭐ Revio AI")
-st.subheader("Intelligent Review Analysis & Customer Resolution Assistant")
+# Inject custom modern CSS
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
-st.write(
-    "Analyze customer feedback, understand sentiment, "
-    "identify issues, prioritize complaints and generate "
-    "suggested responses."
-)
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Background gradient styling */
+.stApp {
+    background: radial-gradient(circle at 10% 20%, rgba(30, 27, 75, 0.4) 0%, transparent 40%),
+                radial-gradient(circle at 90% 10%, rgba(14, 116, 144, 0.25) 0%, transparent 45%),
+                radial-gradient(circle at 50% 80%, rgba(76, 29, 149, 0.25) 0%, transparent 50%),
+                #070B14;
+    color: #F1F5F9;
+}
+
+/* Sidebar styling */
+section[data-testid="stSidebar"] {
+    background-color: #0B1120 !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+section[data-testid="stSidebar"] div.stRadio > label {
+    font-weight: 600;
+    color: #94A3B8;
+}
+
+/* Modern Card Container */
+.revio-card {
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(15, 23, 42, 0.7) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.revio-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(139, 92, 246, 0.35);
+    box-shadow: 0 20px 30px -10px rgba(99, 102, 241, 0.2), 0 0 15px rgba(139, 92, 246, 0.15);
+}
+
+/* Hero Banner */
+.hero-container {
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.8) 0%, rgba(15, 23, 42, 0.9) 50%, rgba(14, 116, 144, 0.4) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 20px;
+    padding: 28px 36px;
+    margin-bottom: 28px;
+    box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.hero-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #FFFFFF 30%, #C4B5FD 70%, #38BDF8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.hero-subtitle {
+    color: #94A3B8;
+    font-size: 1.05rem;
+    font-weight: 400;
+    margin-top: 8px;
+    max-width: 800px;
+    line-height: 1.5;
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(139, 92, 246, 0.18);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    color: #C4B5FD;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+/* Metric Cards */
+.metric-card {
+    background: linear-gradient(145deg, rgba(20, 27, 45, 0.85) 0%, rgba(13, 18, 30, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+
+.metric-card.total {
+    border-left: 4px solid #6366F1;
+}
+.metric-card.positive {
+    border-left: 4px solid #10B981;
+}
+.metric-card.neutral {
+    border-left: 4px solid #F59E0B;
+}
+.metric-card.negative {
+    border-left: 4px solid #EF4444;
+}
+.metric-card.priority {
+    border-left: 4px solid #EC4899;
+}
+
+.metric-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.metric-value {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #F8FAFC;
+    margin: 8px 0 2px 0;
+    line-height: 1.1;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.metric-sub {
+    font-size: 0.78rem;
+    color: #64748B;
+    font-weight: 500;
+}
+
+/* Section Header Component */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 32px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #F8FAFC;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.25));
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #A78BFA;
+    font-size: 1rem;
+}
+
+/* Priority & Sentiment Badges */
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-high {
+    background: rgba(239, 68, 68, 0.18);
+    color: #F87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.badge-medium {
+    background: rgba(245, 158, 11, 0.18);
+    color: #FBBF24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-low {
+    background: rgba(59, 130, 246, 0.18);
+    color: #60A5FA;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.badge-pos {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34D399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-neu {
+    background: rgba(245, 158, 11, 0.18);
+    color: #FBBF24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-neg {
+    background: rgba(239, 68, 68, 0.18);
+    color: #F87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* Expanders styling */
+div[data-testid="stExpander"] {
+    background: rgba(17, 24, 39, 0.65) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    margin-bottom: 12px;
+    transition: border-color 0.2s ease;
+}
+
+div[data-testid="stExpander"]:hover {
+    border-color: rgba(139, 92, 246, 0.35) !important;
+}
+
+/* Urgent Alert Box */
+.urgent-banner {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.05) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #FCA5A5;
+    font-weight: 500;
+}
+
+/* Custom buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 10px !important;
+    padding: 8px 20px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35) !important;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.stDownloadButton > button {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 10px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
+}
+
+.stDownloadButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5) !important;
+}
+
+/* Sidebar decorative header */
+.sidebar-brand {
+    padding: 10px 0 20px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 20px;
+}
+.sidebar-brand h3 {
+    margin: 0;
+    background: linear-gradient(135deg, #FFFFFF 0%, #C4B5FD 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+    font-size: 1.4rem;
+}
+.sidebar-brand p {
+    color: #64748B;
+    font-size: 0.8rem;
+    margin: 4px 0 0 0;
+}
+
+/* Streamlit Dataframe Dark styling tweak */
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Reusable Plotly dark navy template styling helper
+def apply_revio_plotly_theme(fig, height=360):
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(15, 23, 42, 0.6)",
+        plot_bgcolor="rgba(0, 0, 0, 0)",
+        font=dict(family="Plus Jakarta Sans, sans-serif", color="#CBD5E1", size=12),
+        margin=dict(l=30, r=30, t=50, b=40),
+        height=height,
+        title=dict(
+            font=dict(color="#F8FAFC", size=14, family="Plus Jakarta Sans, sans-serif"),
+            x=0.03,
+            y=0.95
+        ),
+        legend=dict(
+            font=dict(color="#94A3B8"),
+            bgcolor="rgba(15, 23, 42, 0.4)",
+            bordercolor="rgba(255, 255, 255, 0.05)",
+            borderwidth=1
+        )
+    )
+    fig.update_xaxes(
+        gridcolor="rgba(255, 255, 255, 0.06)",
+        zerolinecolor="rgba(255, 255, 255, 0.1)",
+        tickfont=dict(color="#94A3B8")
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(255, 255, 255, 0.06)",
+        zerolinecolor="rgba(255, 255, 255, 0.1)",
+        tickfont=dict(color="#94A3B8")
+    )
+    return fig
 
 # Train model once per session
 @st.cache_resource
 def load_model():
     return train_sentiment_model()
 
-
 model = load_model()
+
 # Model evaluation dataset
 evaluation_reviews = [
     "The product quality is excellent and I love it",
@@ -99,10 +445,8 @@ model_f1 = f1_score(
     actual_labels, predicted_labels, average="macro", zero_division=0
 )
 
-
 # Analysis function
 def analyze_review(review):
-
     sentiment_result = analyze_sentiment(review, model)
     sentiment = sentiment_result["sentiment"]
 
@@ -125,222 +469,444 @@ def analyze_review(review):
         "Suggested Response": response
     }
 
+# Polished Sidebar
+with st.sidebar:
+    st.markdown("""
+    <div class="sidebar-brand">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="background: linear-gradient(135deg, #7C3AED, #38BDF8); border-radius:10px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);">⚡</div>
+            <div>
+                <h3>Revio AI</h3>
+                <p>Intelligence Platform</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Sidebar
-st.sidebar.header("Review Input")
-
-input_method = st.sidebar.radio(
-    "Choose input method",
-    ["Sample Dataset", "Upload CSV", "Enter Review"]
-)
-
-
-# Load reviews
-if input_method == "Sample Dataset":
-
-    df = pd.read_csv("data/sample_reviews.csv")
-
-elif input_method == "Upload CSV":
-
-    uploaded_file = st.sidebar.file_uploader(
-        "Upload CSV file",
-        type=["csv"]
+    st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:8px;'>Data Source & Ingestion</p>", unsafe_allow_html=True)
+    input_method = st.radio(
+        "Choose input method",
+        ["Sample Dataset", "Upload CSV", "Enter Review"],
+        label_visibility="collapsed"
     )
 
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+    st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+
+    if input_method == "Sample Dataset":
+        st.info("📊 Using built-in verified sample dataset with multi-topic customer reviews.")
+        df = pd.read_csv("data/sample_reviews.csv")
+
+    elif input_method == "Upload CSV":
+        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:4px;'>Upload Feedback CSV</p>", unsafe_allow_html=True)
+        uploaded_file = st.file_uploader(
+            "Upload CSV file",
+            type=["csv"],
+            label_visibility="collapsed"
+        )
+
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.DataFrame()
+
     else:
+        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:4px;'>Single Review Text</p>", unsafe_allow_html=True)
+        review_text = st.text_area(
+            "Enter customer review",
+            placeholder="Type or paste a customer review here...",
+            height=130,
+            label_visibility="collapsed"
+        )
+
+        analyze_clicked = st.button("✨ Analyze Review", use_container_width=True)
         df = pd.DataFrame()
 
-else:
+    st.markdown("""
+    <div style='margin-top: 40px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);'>
+        <div style='font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;'>Active Architecture</div>
+        <div style='font-size: 0.8rem; color: #CBD5E1; margin-top: 4px;'>• TF-IDF + Logistic Regression</div>
+        <div style='font-size: 0.8rem; color: #CBD5E1;'>• Rule-Based Topic Extraction</div>
+        <div style='font-size: 0.8rem; color: #CBD5E1;'>• Heuristic Priority Scorer</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    review_text = st.sidebar.text_area(
-        "Enter customer review"
-    )
 
-    if st.sidebar.button("Analyze Review"):
-        if review_text.strip():
-            result = analyze_review(review_text)
+# Hero Banner Header
+st.markdown("""
+<div class="hero-container">
+    <div class="hero-badge">⚡ AI-Powered Customer Resolution</div>
+    <h1 class="hero-title">Revio AI Dashboard</h1>
+    <div class="hero-subtitle">
+        Deep customer sentiment analytics, automated complaint triage, and intelligent incident response recommendations engineered for modern customer experience teams.
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-            st.subheader("Review Analysis")
-            st.write("**Customer Review:**", review_text)
+# Single review analysis display
+if input_method == "Enter Review" and 'analyze_clicked' in locals() and analyze_clicked:
+    if review_text.strip():
+        result = analyze_review(review_text)
 
-            for key, value in result.items():
-                st.write(f"**{key}:** {value}")
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">🔍</span>
+            <h3 class="section-title">Individual Review Intelligence</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-        else:
-            st.warning("Please enter a review.")
+        sent_badge_class = "badge-pos" if result["Sentiment"] == "positive" else ("badge-neu" if result["Sentiment"] == "neutral" else "badge-neg")
+        prio_badge_class = "badge-high" if result["Priority"] == "High" else ("badge-medium" if result["Priority"] == "Medium" else "badge-low")
 
-    df = pd.DataFrame()
+        col_rev1, col_rev2 = st.columns([1, 1])
 
+        with col_rev1:
+            st.markdown(f"""
+            <div class="revio-card">
+                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#94A3B8; font-weight:700; margin-bottom:8px;">Customer Feedback</div>
+                <div style="font-size:1.05rem; color:#F8FAFC; line-height:1.5; font-style:italic; padding:12px 14px; background:rgba(0,0,0,0.25); border-radius:10px; border-left:3px solid #8B5CF6;">
+                    "{review_text}"
+                </div>
+                <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Sentiment:</span>
+                        <span class="badge {sent_badge_class}">{result['Sentiment']}</span>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Priority:</span>
+                        <span class="badge {prio_badge_class}">{result['Priority']}</span>
+                    </div>
+                    <div>
+                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Confidence:</span>
+                        <span style="color:#C4B5FD; font-weight:700; font-size:0.85rem;">{result['Confidence']:.1%}</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px; font-size:0.85rem; color:#94A3B8;">
+                    <strong>Detected Topics:</strong> <span style="color:#E2E8F0;">{result['Topic']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_rev2:
+            st.markdown(f"""
+            <div class="revio-card">
+                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#38BDF8; font-weight:700; margin-bottom:8px;">Generated Resolution Response</div>
+                <div style="font-size:0.95rem; color:#E2E8F0; line-height:1.6; padding:14px; background:rgba(30, 41, 59, 0.5); border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
+                    {result['Suggested Response']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    else:
+        st.warning("Please enter a customer review to analyze.")
 
 # Dataset analysis
 if not df.empty:
-
     if "review" not in df.columns:
         st.error("CSV must contain a 'review' column.")
     else:
-
         df = df.dropna(subset=["review"]).copy()
         df["review"] = df["review"].astype(str)
 
         results = df["review"].apply(analyze_review)
-
         results_df = pd.DataFrame(results.tolist())
+        final_df = pd.concat([df.reset_index(drop=True), results_df], axis=1)
 
-        final_df = pd.concat(
-            [df.reset_index(drop=True), results_df],
-            axis=1
-        )
+        # Urgent Complaints Section
+        urgent_reviews = final_df[final_df["Priority"] == "High"]
 
-        
-        # Urgent Complaints
-        st.subheader("🚨 Urgent Customer Complaints")
-
-        urgent_reviews = final_df[
-            final_df["Priority"] == "High"
-        ]
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">🚨</span>
+            <h3 class="section-title">Critical & Urgent Escalations</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
         if not urgent_reviews.empty:
-            st.warning(
-                f"{len(urgent_reviews)} high-priority complaints "
-                "require attention."
-            )
+            st.markdown(f"""
+            <div class="urgent-banner">
+                <span style="font-size:1.3rem;">⚠️</span>
+                <div>
+                    <strong>Attention Needed:</strong> {len(urgent_reviews)} high-priority complaints have been detected and require immediate intervention.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
             for _, row in urgent_reviews.iterrows():
-                with st.expander(
-                    f"Review ID: {row.get('review_id', 'N/A')} "
-                    f"— {row['Topic']}"
-                ):
-                    st.write("**Customer Review:**", row["review"])
-                    st.write("**Sentiment:**", row["Sentiment"])
-                    st.write("**Suggested Action:**", row["Suggested Response"])
+                review_id_label = row.get('review_id', 'N/A')
+                with st.expander(f"⚠️ Review #{review_id_label} — Topic: {row['Topic']}"):
+                    u_col1, u_col2 = st.columns([1, 1])
+                    with u_col1:
+                        st.markdown(f"**Customer Review:**\n> {row['review']}")
+                        st.markdown(f"**Sentiment:** <span class='badge badge-neg'>{row['Sentiment']}</span> &nbsp; **Priority:** <span class='badge badge-high'>{row['Priority']}</span>", unsafe_allow_html=True)
+                    with u_col2:
+                        st.markdown("**Suggested Action & Response:**")
+                        st.info(row["Suggested Response"])
         else:
-            st.success("No high-priority complaints found.")
+            st.markdown("""
+            <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:12px; padding:14px 18px; color:#6EE7B7; display:flex; align-items:center; gap:10px;">
+                <span>✨</span> All reviews are within standard operational limits. No high-priority complaints found.
+            </div>
+            """, unsafe_allow_html=True)
 
-        # Metrics
-        st.divider()
-        st.header("Business Intelligence Dashboard")
+        # Business Intelligence Dashboard Metrics
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">📊</span>
+            <h3 class="section-title">Executive Performance Overview</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        total_cnt = len(final_df)
+        pos_cnt = (final_df["Sentiment"] == "positive").sum()
+        neu_cnt = (final_df["Sentiment"] == "neutral").sum()
+        neg_cnt = (final_df["Sentiment"] == "negative").sum()
+        prio_cnt = (final_df["Priority"] == "High").sum()
 
         col1, col2, col3, col4, col5 = st.columns(5)
 
-        col1.metric("Total Reviews", len(final_df))
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card total">
+                <div class="metric-label">
+                    <span>Total Reviews</span>
+                    <span style="color:#818CF8;">📁</span>
+                </div>
+                <div class="metric-value">{total_cnt}</div>
+                <div class="metric-sub">Processed Ingestion</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        col2.metric(
-            "Positive Reviews",
-            (final_df["Sentiment"] == "positive").sum()
-        )
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card positive">
+                <div class="metric-label">
+                    <span>Positive</span>
+                    <span style="color:#34D399;">👍</span>
+                </div>
+                <div class="metric-value">{pos_cnt}</div>
+                <div class="metric-sub">{pos_cnt/total_cnt:.1%} of overall volume</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        col3.metric(
-            "Neutral Reviews",
-            (final_df["Sentiment"] == "neutral").sum()
-        )
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card neutral">
+                <div class="metric-label">
+                    <span>Neutral</span>
+                    <span style="color:#FBBF24;">⚖️</span>
+                </div>
+                <div class="metric-value">{neu_cnt}</div>
+                <div class="metric-sub">{neu_cnt/total_cnt:.1%} of overall volume</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        col4.metric(
-            "Negative Reviews",
-            (final_df["Sentiment"] == "negative").sum()
-        )
+        with col4:
+            st.markdown(f"""
+            <div class="metric-card negative">
+                <div class="metric-label">
+                    <span>Negative</span>
+                    <span style="color:#F87171;">👎</span>
+                </div>
+                <div class="metric-value">{neg_cnt}</div>
+                <div class="metric-sub">{neg_cnt/total_cnt:.1%} of overall volume</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        col5.metric(
-            "High Priority Issues",
-            (final_df["Priority"] == "High").sum()
-        )
-                # Model Performance
-        st.subheader("Sentiment Model Performance")
+        with col5:
+            st.markdown(f"""
+            <div class="metric-card priority">
+                <div class="metric-label">
+                    <span>High Priority</span>
+                    <span style="color:#F472B6;">🚨</span>
+                </div>
+                <div class="metric-value">{prio_cnt}</div>
+                <div class="metric-sub">Action required</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.caption(
-            "Evaluation results based on 30 manually labelled test reviews."
-        )
+        # Model Performance & Confusion Matrix
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">🧠</span>
+            <h3 class="section-title">Sentiment Model Performance & Evaluation</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-        perf1, perf2, perf3, perf4 = st.columns(4)
+        eval_col_left, eval_col_right = st.columns([1, 1])
 
-        perf1.metric("Accuracy", f"{model_accuracy:.1%}")
-        perf2.metric("Precision", f"{model_precision:.1%}")
-        perf3.metric("Recall", f"{model_recall:.1%}")
-        perf4.metric("F1-Score", f"{model_f1:.1%}")
-                # Confusion Matrix
-        st.subheader("Sentiment Confusion Matrix")
+        with eval_col_left:
+            st.caption("Standardized benchmark testing on 30 ground-truth validation reviews:")
+            
+            pcol1, pcol2 = st.columns(2)
+            with pcol1:
+                st.markdown(f"""
+                <div class="revio-card" style="margin-bottom:14px; text-align:center;">
+                    <div style="font-size:0.75rem; text-transform:uppercase; color:#94A3B8; font-weight:700;">Accuracy</div>
+                    <div style="font-size:2.2rem; font-weight:800; color:#38BDF8; margin:6px 0;">{model_accuracy:.1%}</div>
+                    <div style="font-size:0.75rem; color:#64748B;">Correct Predictions</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        cm_fig = px.imshow(
-            model_cm,
-            x=["Positive", "Neutral", "Negative"],
-            y=["Positive", "Neutral", "Negative"],
-            text_auto=True,
-            color_continuous_scale="Blues",
-            labels={
-                "x": "Predicted Sentiment",
-                "y": "Actual Sentiment",
-                "color": "Reviews"
-            }
-        )
+                st.markdown(f"""
+                <div class="revio-card" style="text-align:center;">
+                    <div style="font-size:0.75rem; text-transform:uppercase; color:#94A3B8; font-weight:700;">Recall</div>
+                    <div style="font-size:2.2rem; font-weight:800; color:#818CF8; margin:6px 0;">{model_recall:.1%}</div>
+                    <div style="font-size:0.75rem; color:#64748B;">True Positive Rate</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        st.plotly_chart(cm_fig, use_container_width=True)
-        # Charts
+            with pcol2:
+                st.markdown(f"""
+                <div class="revio-card" style="margin-bottom:14px; text-align:center;">
+                    <div style="font-size:0.75rem; text-transform:uppercase; color:#94A3B8; font-weight:700;">Precision</div>
+                    <div style="font-size:2.2rem; font-weight:800; color:#A78BFA; margin:6px 0;">{model_precision:.1%}</div>
+                    <div style="font-size:0.75rem; color:#64748B;">Positive Predictive Value</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        # Topic Analytics
-        st.subheader("Customer Issue Categories")
+                st.markdown(f"""
+                <div class="revio-card" style="text-align:center;">
+                    <div style="font-size:0.75rem; text-transform:uppercase; color:#94A3B8; font-weight:700;">F1-Score</div>
+                    <div style="font-size:2.2rem; font-weight:800; color:#34D399; margin:6px 0;">{model_f1:.1%}</div>
+                    <div style="font-size:0.75rem; color:#64748B;">Harmonic Mean</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        topic_data = (
-            final_df["Topic"]
-            .str.split(", ")
-            .explode()
-            .value_counts()
-            .reset_index()
-        )
+        with eval_col_right:
+            labels_cm = ["Positive", "Neutral", "Negative"]
+            cm_fig = px.imshow(
+                model_cm,
+                x=labels_cm,
+                y=labels_cm,
+                text_auto=True,
+                color_continuous_scale=[
+                    [0.0, "#0F172A"],
+                    [0.5, "#4338CA"],
+                    [1.0, "#8B5CF6"]
+                ],
+                labels={
+                    "x": "Predicted Sentiment",
+                    "y": "Actual Sentiment",
+                    "color": "Reviews"
+                },
+                title="Confusion Matrix (Ground Truth vs Model Prediction)"
+            )
+            cm_fig = apply_revio_plotly_theme(cm_fig, height=315)
+            cm_fig.update_traces(
+                textfont=dict(size=14, color="#FFFFFF", family="Plus Jakarta Sans"),
+                hovertemplate="Actual: %{y}<br>Predicted: %{x}<br>Count: %{z}<extra></extra>"
+            )
+            st.plotly_chart(cm_fig, use_container_width=True)
 
-        topic_data.columns = ["Topic", "Count"]
+        # Topic & Distribution Analytics
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">📈</span>
+            <h3 class="section-title">Sentiment & Issue Breakdown</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-        topic_fig = px.bar(
-            topic_data,
-            x="Topic",
-            y="Count",
-            title="Customer Issues by Topic",
-            text="Count"
-        )
+        chart_row1, chart_row2, chart_row3 = st.columns([1.2, 1, 1])
 
-        st.plotly_chart(
-            topic_fig,
-            use_container_width=True
-        )
+        with chart_row1:
+            topic_data = (
+                final_df["Topic"]
+                .str.split(", ")
+                .explode()
+                .value_counts()
+                .reset_index()
+            )
+            topic_data.columns = ["Topic", "Count"]
 
-        st.subheader("Review Analytics")
+            topic_fig = px.bar(
+                topic_data,
+                x="Topic",
+                y="Count",
+                title="Customer Issues by Category",
+                text="Count",
+                color="Count",
+                color_continuous_scale=[[0.0, "#3B82F6"], [1.0, "#8B5CF6"]]
+            )
+            topic_fig = apply_revio_plotly_theme(topic_fig, height=340)
+            topic_fig.update_traces(
+                textposition='outside',
+                textfont=dict(color="#CBD5E1", size=11, family="Plus Jakarta Sans"),
+                marker_line_color='rgba(255,255,255,0.1)',
+                marker_line_width=1,
+                hovertemplate="<b>%{x}</b><br>Incidents: %{y}<extra></extra>"
+            )
+            topic_fig.update_coloraxes(showscale=False)
+            st.plotly_chart(topic_fig, use_container_width=True)
 
-        chart1, chart2 = st.columns(2)
-
-        with chart1:
+        with chart_row2:
             sentiment_counts = (
                 final_df["Sentiment"].value_counts().reset_index()
             )
             sentiment_counts.columns = ["Sentiment", "Count"]
 
+            color_map = {
+                "positive": "#10B981",
+                "neutral": "#F59E0B",
+                "negative": "#EF4444"
+            }
+
             fig1 = px.pie(
                 sentiment_counts,
                 names="Sentiment",
                 values="Count",
-                title="Sentiment Distribution"
+                title="Sentiment Distribution",
+                hole=0.55,
+                color="Sentiment",
+                color_discrete_map=color_map
             )
-
+            fig1 = apply_revio_plotly_theme(fig1, height=340)
+            fig1.update_traces(
+                textinfo='percent+label',
+                textfont=dict(color="#FFFFFF", size=12, family="Plus Jakarta Sans"),
+                marker=dict(line=dict(color='#0F172A', width=2)),
+                hovertemplate="<b>%{label}</b><br>Reviews: %{value} (%{percent})<extra></extra>"
+            )
             st.plotly_chart(fig1, use_container_width=True)
 
-        with chart2:
+        with chart_row3:
             priority_counts = (
                 final_df["Priority"].value_counts().reset_index()
             )
             priority_counts.columns = ["Priority", "Count"]
 
+            priority_color_map = {
+                "High": "#EF4444",
+                "Medium": "#F59E0B",
+                "Low": "#3B82F6"
+            }
+
             fig2 = px.bar(
                 priority_counts,
                 x="Priority",
                 y="Count",
-                title="Complaint Priority Distribution"
+                title="Priority Severity Spread",
+                text="Count",
+                color="Priority",
+                color_discrete_map=priority_color_map
             )
-
+            fig2 = apply_revio_plotly_theme(fig2, height=340)
+            fig2.update_traces(
+                textposition='outside',
+                textfont=dict(color="#CBD5E1", size=11, family="Plus Jakarta Sans"),
+                marker_line_color='rgba(255,255,255,0.1)',
+                marker_line_width=1,
+                hovertemplate="<b>%{x} Priority</b><br>Count: %{y}<extra></extra>"
+            )
+            fig2.update_layout(showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
 
-        # Review table
-
-        # Review Filters
-        st.subheader("Filter Customer Reviews")
+        # Interactive Filtering & Table Exploration
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">🔍</span>
+            <h3 class="section-title">Review Explorer & Triage Filters</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
         filter_col1, filter_col2, filter_col3 = st.columns(3)
 
@@ -365,7 +931,6 @@ if not df.empty:
                 .unique()
                 .tolist()
             )
-
             topic_filter = st.selectbox(
                 "Filter by Topic",
                 topic_options
@@ -390,39 +955,60 @@ if not df.empty:
                 )
             ]
 
-        st.write(f"Showing {len(filtered_df)} matching reviews.")
-
-        st.subheader("Analyzed Customer Reviews")
+        st.markdown(f"""
+        <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.9rem; color:#94A3B8;">
+                Displaying <b style="color:#818CF8;">{len(filtered_df)}</b> of {len(final_df)} filtered customer feedback items
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.dataframe(
             filtered_df,
             use_container_width=True
         )
 
-        # Response generator
-        st.subheader("Suggested Customer Responses")
+        # Response Generator Accordion
+        st.markdown("""
+        <div class="section-header">
+            <span class="section-icon">💬</span>
+            <h3 class="section-title">Suggested Customer Resolution Responses</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
         for index, row in filtered_df.iterrows():
-            with st.expander(
-                f"Review {index + 1} — {row['Priority']} Priority"
-            ):
+            prio = row['Priority']
+            icon = "🔴" if prio == "High" else ("🟡" if prio == "Medium" else "🔵")
+            rev_id = row.get('review_id', index + 1)
+            
+            with st.expander(f"{icon} Review #{rev_id} — {prio} Priority | Topic: {row['Topic']}"):
+                r_col1, r_col2 = st.columns([1, 1.2])
+                with r_col1:
+                    st.markdown("**Customer Review:**")
+                    st.markdown(f"> *\"{row['review']}\"*")
+                    st.markdown(f"""
+                    <div style="margin-top:10px;">
+                        <span style="font-size:0.8rem; color:#94A3B8;">Sentiment:</span> 
+                        <b style="color:#CBD5E1;">{row['Sentiment']}</b> &nbsp;|&nbsp; 
+                        <span style="font-size:0.8rem; color:#94A3B8;">Priority:</span> 
+                        <b style="color:#CBD5E1;">{row['Priority']}</b>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                st.write("**Customer Review:**", row["review"])
+                with r_col2:
+                    st.markdown("**Suggested Resolution Draft:**")
+                    st.markdown(f"""
+                    <div style="background:rgba(30, 41, 59, 0.4); border:1px solid rgba(139, 92, 246, 0.25); border-radius:10px; padding:12px; font-size:0.92rem; color:#E2E8F0; line-height:1.5;">
+                        {row['Suggested Response']}
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                st.write("**Sentiment:**", row["Sentiment"])
-
-                st.write("**Topic:**", row["Topic"])
-
-                st.write(
-                    "**Suggested Response:**",
-                    row["Suggested Response"]
-                )
-
-        # Download results
+        # Download Section
+        st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
         csv_data = final_df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "Download Analysis Report",
+            "📥 Download Analysis Report (CSV)",
             data=csv_data,
             file_name="revio_ai_analysis.csv",
             mime="text/csv"
