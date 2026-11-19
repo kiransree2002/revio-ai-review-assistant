@@ -1,9 +1,15 @@
 
 TOPIC_KEYWORDS = {
+        
     "Delivery": [
         "delivery", "shipping", "arrived late",
-        "delayed", "courier", "tracking", "not delivered"
+        "arrived on time", "on time", "fast shipping",
+        "delayed", "courier", "tracking",
+        "not delivered", "late delivery",
+        "quick delivery", "slow delivery",
+        "delivery time", "shipment"
     ],
+
     "Pricing": [
         "price", "expensive", "cost",
         "charged", "payment", "refund"
