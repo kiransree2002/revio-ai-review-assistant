@@ -56,5 +56,5 @@ The evaluation dataset contains 10 positive, 10 neutral, and 10 negative reviews
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/revio-ai-review-assistant.git
+git clone https://github.com/kiransree2002/revio-ai-review-assistant.git
 cd revio-ai-review-assistant
