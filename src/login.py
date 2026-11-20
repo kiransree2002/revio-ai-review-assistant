@@ -79,7 +79,25 @@ def render_login_page() -> None:
                         st.error("Invalid credentials. Please verify your user ID and password.")
 
         st.markdown("""
-        <div style="margin-top: 18px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); text-align: center;">
+        <div style="margin-top: 20px; padding: 16px 18px; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%); border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 0.8rem; font-weight: 800; color: #C4B5FD; text-transform: uppercase; letter-spacing: 0.06em;">
+                    🔑 Demo Account Access
+                </span>
+                <span style="font-size: 0.7rem; background: rgba(139, 92, 246, 0.25); color: #E9D5FF; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">
+                    Recruiter Evaluation
+                </span>
+            </div>
+            <div style="font-size: 0.82rem; color: #CBD5E1; line-height: 1.6; margin-bottom: 8px;">
+                Use these demo evaluation credentials to explore the employee review dashboard, urgent complaints, and response approval:
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 12px; font-family: monospace; font-size: 0.82rem;">
+                <div style="color: #94A3B8;">Username: <strong style="color: #F8FAFC;">demo_employee</strong></div>
+                <div style="color: #94A3B8;">Password: <strong style="color: #F8FAFC;">demo1234</strong></div>
+            </div>
+        </div>
+
+        <div style="margin-top: 14px; padding: 10px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); text-align: center;">
             <span style="font-size: 0.78rem; color: #64748B;">
                 Need to submit a review instead? 
                 <a href="?page=submit_review&biz=demo-corp" target="_self" style="color: #38BDF8; font-weight: 600; text-decoration: none;">
