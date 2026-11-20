@@ -7,7 +7,12 @@ from src.sentiment import train_sentiment_model, analyze_sentiment
 from src.topic_classifier import classify_topic
 from src.priority import detect_priority
 from src.response_generator import generate_response
-from src.database import seed_demo_data, get_reviews_by_business
+from src.database import (
+    seed_demo_data,
+    get_reviews_by_business,
+    update_suggested_response,
+    approve_review_response
+)
 from src.customer_form import render_customer_review_form
 from src.login import render_login_page, logout_employee
 from sklearn.metrics import (
@@ -518,44 +523,59 @@ with st.sidebar:
     if st.button("🚪 Sign Out", use_container_width=True):
         logout_employee()
 
-    st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-top:16px; margin-bottom:8px;'>Data Source & Ingestion</p>", unsafe_allow_html=True)
-    input_method = st.radio(
-        "Choose input method",
-        ["Live Business Reviews", "Sample Dataset", "Upload CSV", "Enter Review"],
+    st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:6px;'>Dashboard Views</p>", unsafe_allow_html=True)
+    view_mode = st.radio(
+        "View Mode",
+        [
+            "⚡ Live Customer Reviews",
+            "🔬 Internal AI Testing",
+            "📥 CSV Data Import",
+            "🧪 Demonstration Dataset"
+        ],
+        index=0,
         label_visibility="collapsed"
     )
 
-    st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
 
-    if input_method == "Live Business Reviews":
+    df = pd.DataFrame()
+    data_source_badge = ""
+
+    if view_mode == "⚡ Live Customer Reviews":
+        data_source_badge = "LIVE VERIFIED FEEDBACK"
         db_records = get_reviews_by_business(auth_business_id)
         if db_records:
             df = pd.DataFrame(db_records)
-            # Normalize column names for downstream analysis
             if "review_text" in df.columns and "review" not in df.columns:
                 df["review"] = df["review_text"]
             if "id" in df.columns and "review_id" not in df.columns:
                 df["review_id"] = df["id"]
-            st.success(f"📊 Connected to live database for **{auth_business_name}** ({len(df)} reviews).")
+            st.success(f"Connected to live feedback database ({len(df)} customer submissions).")
         else:
-            st.info(f"ℹ️ No customer reviews submitted yet for **{auth_business_name}**.")
             df = pd.DataFrame()
 
-    elif input_method == "Sample Dataset":
-        st.info("📊 Using built-in verified sample dataset with multi-topic customer reviews.")
-        df = pd.read_csv("data/sample_reviews.csv")
+    elif view_mode == "🔬 Internal AI Testing":
+        data_source_badge = "INTERNAL MODEL SANDBOX"
+        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#A78BFA; font-weight:700; margin-bottom:4px;'>Internal Feedback Tester</p>", unsafe_allow_html=True)
+        review_text = st.text_area(
+            "Enter customer review",
+            placeholder="Type sample text to test sentiment, topics, priority and response generation...",
+            height=130,
+            label_visibility="collapsed"
+        )
+        analyze_clicked = st.button("✨ Run AI Inference", use_container_width=True)
 
-    elif input_method == "Upload CSV":
-        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:4px;'>Upload Feedback CSV</p>", unsafe_allow_html=True)
+    elif view_mode == "📥 CSV Data Import":
+        data_source_badge = "EXTERNAL CSV IMPORT"
+        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#38BDF8; font-weight:700; margin-bottom:4px;'>Import Historical CSV</p>", unsafe_allow_html=True)
         uploaded_file = st.file_uploader(
             "Upload CSV file",
             type=["csv"],
             label_visibility="collapsed"
         )
-
         if uploaded_file is not None:
             try:
-                # Security hardening: validate file size, encoding and CSV structure
                 if uploaded_file.size > 20 * 1024 * 1024:
                     st.error("Uploaded file exceeds 20MB limit.")
                     df = pd.DataFrame()
@@ -564,26 +584,24 @@ with st.sidebar:
                     if "review" not in df.columns:
                         st.error("Invalid CSV structure: CSV must contain a 'review' column.")
                         df = pd.DataFrame()
+                    else:
+                        st.info(f"Loaded {len(df)} rows from uploaded file: `{uploaded_file.name}`. Note: Imported reviews remain in local session memory and do not alter your live customer database.")
             except Exception as e:
                 st.error(f"Error parsing CSV file: {str(e)}")
                 df = pd.DataFrame()
+
+    elif view_mode == "🧪 Demonstration Dataset":
+        data_source_badge = "SYNTHETIC DEMO BENCHMARK"
+        st.info("Demonstration benchmark data with 9 diverse customer issues across support, delivery, and pricing.")
+        load_demo_btn = st.checkbox("Load Demonstration Reviews", value=True)
+        if load_demo_btn:
+            df = pd.read_csv("data/sample_reviews.csv")
+            st.caption("ℹ️ Demo data is isolated for presentation and does not mix with live customer reviews.")
         else:
             df = pd.DataFrame()
 
-    else:
-        st.markdown("<p style='font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#94A3B8; font-weight:700; margin-bottom:4px;'>Single Review Text</p>", unsafe_allow_html=True)
-        review_text = st.text_area(
-            "Enter customer review",
-            placeholder="Type or paste a customer review here...",
-            height=130,
-            label_visibility="collapsed"
-        )
-
-        analyze_clicked = st.button("✨ Analyze Review", use_container_width=True)
-        df = pd.DataFrame()
-
     st.markdown(f"""
-    <div style='margin-top: 40px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);'>
+    <div style='margin-top: 30px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);'>
         <div style='font-size: 0.75rem; color: #94A3B8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;'>Active Architecture</div>
         <div style='font-size: 0.8rem; color: #CBD5E1; margin-top: 4px;'>• TF-IDF + Logistic Regression</div>
         <div style='font-size: 0.8rem; color: #CBD5E1;'>• Rule-Based Topic Extraction</div>
@@ -597,18 +615,23 @@ with st.sidebar:
 
 
 # Hero Banner Header
-st.markdown("""
+st.markdown(f"""
 <div class="hero-container">
-    <div class="hero-badge">⚡ AI-Powered Customer Resolution</div>
-    <h1 class="hero-title">Revio AI Dashboard</h1>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div class="hero-badge">⚡ AI-Powered Customer Resolution</div>
+        <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); padding:4px 12px; border-radius:8px; font-size:0.75rem; color:#94A3B8; font-weight:700; letter-spacing:0.06em;">
+            SOURCE: <span style="color:#C4B5FD;">{data_source_badge}</span>
+        </div>
+    </div>
+    <h1 class="hero-title">{auth_business_name} Dashboard</h1>
     <div class="hero-subtitle">
         Deep customer sentiment analytics, automated complaint triage, and intelligent incident response recommendations engineered for modern customer experience teams.
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Single review analysis display
-if input_method == "Enter Review" and 'analyze_clicked' in locals() and analyze_clicked:
+# Single review analysis display (Internal AI Testing mode)
+if view_mode == "🔬 Internal AI Testing" and 'analyze_clicked' in locals() and analyze_clicked:
     clean_single_review = review_text.strip() if review_text else ""
     if clean_single_review:
         if len(clean_single_review) > 5000:
@@ -618,70 +641,115 @@ if input_method == "Enter Review" and 'analyze_clicked' in locals() and analyze_
 
             st.markdown("""
             <div class="section-header">
-                <span class="section-icon">🔍</span>
-                <h3 class="section-title">Individual Review Intelligence</h3>
+                <span class="section-icon">🔬</span>
+                <h3 class="section-title">Internal AI Model Evaluation Sandbox</h3>
             </div>
             """, unsafe_allow_html=True)
 
-        sent_badge_class = "badge-pos" if result["Sentiment"] == "positive" else ("badge-neu" if result["Sentiment"] == "neutral" else "badge-neg")
-        prio_badge_class = "badge-high" if result["Priority"] == "High" else ("badge-medium" if result["Priority"] == "Medium" else "badge-low")
+            sent_badge_class = "badge-pos" if result["Sentiment"] == "positive" else ("badge-neu" if result["Sentiment"] == "neutral" else "badge-neg")
+            prio_badge_class = "badge-high" if result["Priority"] == "High" else ("badge-medium" if result["Priority"] == "Medium" else "badge-low")
 
-        col_rev1, col_rev2 = st.columns([1, 1])
+            col_rev1, col_rev2 = st.columns([1, 1])
 
-        with col_rev1:
-            st.markdown(f"""
-            <div class="revio-card">
-                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#94A3B8; font-weight:700; margin-bottom:8px;">Customer Feedback</div>
-                <div style="font-size:1.05rem; color:#F8FAFC; line-height:1.5; font-style:italic; padding:12px 14px; background:rgba(0,0,0,0.25); border-radius:10px; border-left:3px solid #8B5CF6;">
-                    "{review_text}"
-                </div>
-                <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Sentiment:</span>
-                        <span class="badge {sent_badge_class}">{result['Sentiment']}</span>
+            with col_rev1:
+                st.markdown(f"""
+                <div class="revio-card">
+                    <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#94A3B8; font-weight:700; margin-bottom:8px;">Test Input Text</div>
+                    <div style="font-size:1.05rem; color:#F8FAFC; line-height:1.5; font-style:italic; padding:12px 14px; background:rgba(0,0,0,0.25); border-radius:10px; border-left:3px solid #8B5CF6;">
+                        "{clean_single_review}"
                     </div>
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Priority:</span>
-                        <span class="badge {prio_badge_class}">{result['Priority']}</span>
+                    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                        <div>
+                            <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Sentiment:</span>
+                            <span class="badge {sent_badge_class}">{result['Sentiment']}</span>
+                        </div>
+                        <div>
+                            <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Priority:</span>
+                            <span class="badge {prio_badge_class}">{result['Priority']}</span>
+                        </div>
+                        <div>
+                            <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Confidence:</span>
+                            <span style="color:#C4B5FD; font-weight:700; font-size:0.85rem;">{result['Confidence']:.1%}</span>
+                        </div>
                     </div>
-                    <div>
-                        <span style="font-size:0.75rem; color:#64748B; margin-right:4px;">Confidence:</span>
-                        <span style="color:#C4B5FD; font-weight:700; font-size:0.85rem;">{result['Confidence']:.1%}</span>
+                    <div style="margin-top:12px; font-size:0.85rem; color:#94A3B8;">
+                        <strong>Detected Topics:</strong> <span style="color:#E2E8F0;">{result['Topic']}</span>
                     </div>
                 </div>
-                <div style="margin-top:12px; font-size:0.85rem; color:#94A3B8;">
-                    <strong>Detected Topics:</strong> <span style="color:#E2E8F0;">{result['Topic']}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-        with col_rev2:
-            st.markdown(f"""
-            <div class="revio-card">
-                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#38BDF8; font-weight:700; margin-bottom:8px;">Generated Resolution Response</div>
-                <div style="font-size:0.95rem; color:#E2E8F0; line-height:1.6; padding:14px; background:rgba(30, 41, 59, 0.5); border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
-                    {result['Suggested Response']}
+            with col_rev2:
+                st.markdown(f"""
+                <div class="revio-card">
+                    <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#38BDF8; font-weight:700; margin-bottom:8px;">Generated Resolution Response</div>
+                    <div style="font-size:0.95rem; color:#E2E8F0; line-height:1.6; padding:14px; background:rgba(30, 41, 59, 0.5); border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
+                        {result['Suggested Response']}
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
     else:
-        st.warning("Please enter a customer review to analyze.")
+        st.warning("Please enter review text to test the model.")
 
-# Dataset analysis
-if not df.empty:
+# Dataset analysis or Empty State display
+if df.empty:
+    if view_mode == "⚡ Live Customer Reviews":
+        st.markdown(f"""
+        <div style="margin: 40px auto; max-width: 720px; padding: 40px 30px; text-align: center; background: linear-gradient(145deg, rgba(20, 27, 45, 0.7) 0%, rgba(13, 18, 30, 0.7) 100%); border: 1px dashed rgba(139, 92, 246, 0.35); border-radius: 20px;">
+            <div style="font-size: 3rem; margin-bottom: 12px;">📬</div>
+            <h3 style="color: #F8FAFC; font-weight: 700; margin-bottom: 8px;">No Live Customer Reviews Yet</h3>
+            <p style="color: #94A3B8; font-size: 0.95rem; line-height: 1.6; max-width: 520px; margin: 0 auto 20px auto;">
+                Your customer review database for <strong>{auth_business_name}</strong> is currently empty.
+                Once customers submit feedback through your public review widget, their entries will automatically appear here with AI sentiment analysis and suggested responses.
+            </p>
+            <div style="display:inline-flex; gap:12px; align-items:center;">
+                <a href="?page=submit_review&biz={auth_business_id}" target="_blank" style="display:inline-block; padding: 10px 22px; background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 0.88rem; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);">
+                    🔗 Open Customer Review Form
+                </a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif view_mode == "📥 CSV Data Import":
+        st.info("Upload a CSV file with a `review` column above to view analytics.")
+    elif view_mode == "🧪 Demonstration Dataset":
+        st.info("Check 'Load Demonstration Reviews' in the sidebar to view sample data analytics.")
+else:
     if "review" not in df.columns:
-        st.error("CSV must contain a 'review' column.")
+        st.error("Dataset must contain a 'review' column.")
     else:
         df = df.dropna(subset=["review"]).copy()
         df["review"] = df["review"].astype(str)
 
-        results = df["review"].apply(analyze_review)
-        results_df = pd.DataFrame(results.tolist())
+        # For live reviews, preserve existing response_status, approved_response, and suggested_response
+        has_approval_workflow = "response_status" in df.columns
+
+        results = []
+        for _, row in df.iterrows():
+            rev_txt = row["review"]
+            # If review already has AI fields pre-computed from database, preserve them
+            if has_approval_workflow and pd.notna(row.get("sentiment")):
+                results.append({
+                    "Sentiment": row.get("sentiment"),
+                    "Confidence": row.get("confidence", 0.0),
+                    "Topic": row.get("topic", "General Feedback"),
+                    "Priority": row.get("priority", "Low"),
+                    "Suggested Response": row.get("suggested_response", "")
+                })
+            else:
+                results.append(analyze_review(rev_txt))
+
+        results_df = pd.DataFrame(results)
         final_df = pd.concat([df.reset_index(drop=True), results_df], axis=1)
+
+        # Ensure response_status column exists in final_df for filtering
+        if "response_status" not in final_df.columns:
+            final_df["response_status"] = "pending_approval"
+        if "approved_response" not in final_df.columns:
+            final_df["approved_response"] = None
 
         # Urgent Complaints Section
         urgent_reviews = final_df[final_df["Priority"] == "High"]
+        auth_user_id = st.session_state.get("user_id")
 
         st.markdown("""
         <div class="section-header">
@@ -700,22 +768,121 @@ if not df.empty:
             </div>
             """, unsafe_allow_html=True)
 
-            for _, row in urgent_reviews.iterrows():
-                review_id_label = row.get('review_id', 'N/A')
-                with st.expander(f"⚠️ Review #{review_id_label} — Topic: {row['Topic']}"):
-                    u_col1, u_col2 = st.columns([1, 1])
+            for index, row in urgent_reviews.iterrows():
+                review_id_label = row.get('review_id', index + 1)
+                raw_id = row.get('id')
+                status = row.get('response_status', 'pending_approval')
+                is_live_review = (view_mode == "⚡ Live Customer Reviews") and (raw_id is not None)
+
+                urg_status_badge = (
+                    "<span style='background:rgba(16, 185, 129, 0.2); color:#34D399; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:9999px; font-size:0.72rem; font-weight:700;'>✓ APPROVED</span>"
+                    if status == "approved"
+                    else "<span style='background:rgba(245, 158, 11, 0.2); color:#FBBF24; border:1px solid rgba(245, 158, 11, 0.4); padding:2px 8px; border-radius:9999px; font-size:0.72rem; font-weight:700;'>⏳ PENDING APPROVAL</span>"
+                )
+
+                urg_title = f"⚠️ Review #{review_id_label} — Topic: {row['Topic']} | Status: {'APPROVED' if status == 'approved' else 'PENDING'}"
+
+                with st.expander(urg_title):
+                    u_col1, u_col2 = st.columns([1, 1.2])
+
                     with u_col1:
-                        st.markdown(f"**Customer Review:**\n> {row['review']}")
-                        st.markdown(f"**Sentiment:** <span class='badge badge-neg'>{row['Sentiment']}</span> &nbsp; **Priority:** <span class='badge badge-high'>{row['Priority']}</span>", unsafe_allow_html=True)
+                        st.markdown(f"**Customer Review Feedback:**\n> {row['review']}")
+                        st.markdown(f"""
+                        <div style="margin-top:10px;">
+                            <span style="font-size:0.8rem; color:#94A3B8;">Sentiment:</span> <span class='badge badge-neg'>{row['Sentiment']}</span> &nbsp;|&nbsp; 
+                            <span style="font-size:0.8rem; color:#94A3B8;">Priority:</span> <span class='badge badge-high'>{row['Priority']}</span> &nbsp;|&nbsp; 
+                            <span style="font-size:0.8rem; color:#94A3B8;">Status:</span> {urg_status_badge}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        if status == "approved":
+                            approved_by_label = row.get("approved_by_username") or f"Employee #{row.get('approved_by', 'ID')}"
+                            approved_at_label = row.get("approved_at") or "Recently"
+                            st.markdown(f"""
+                            <div style="margin-top:12px; padding:10px 14px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); border-radius:8px;">
+                                <div style="font-size:0.75rem; color:#34D399; font-weight:700; text-transform:uppercase;">Internal Approval Record</div>
+                                <div style="font-size:0.82rem; color:#E2E8F0; margin-top:2px;">Approved by <strong>{approved_by_label}</strong> on {approved_at_label}</div>
+                                <div style="font-size:0.72rem; color:#94A3B8; margin-top:2px;">(Internal employee resolution sign-off; not dispatched externally)</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
                     with u_col2:
-                        st.markdown("**Suggested Action & Response:**")
-                        st.info(row["Suggested Response"])
-        else:
-            st.markdown("""
-            <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:12px; padding:14px 18px; color:#6EE7B7; display:flex; align-items:center; gap:10px;">
-                <span>✨</span> All reviews are within standard operational limits. No high-priority complaints found.
-            </div>
-            """, unsafe_allow_html=True)
+                        current_suggested = row.get("suggested_response", "")
+                        approved_resp_text = row.get("approved_response")
+
+                        if status == "approved":
+                            st.markdown("**Final Approved Action & Response:**")
+                            st.markdown(f"""
+                            <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.35); border-radius:10px; padding:14px; font-size:0.92rem; color:#E2E8F0; line-height:1.5;">
+                                {approved_resp_text or current_suggested}
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown("**AI-Suggested Action & Response:**")
+                            st.markdown(f"""
+                            <div style="background:rgba(30, 41, 59, 0.4); border:1px solid rgba(139, 92, 246, 0.25); border-radius:10px; padding:12px; font-size:0.92rem; color:#E2E8F0; line-height:1.5; margin-bottom:12px;">
+                                {current_suggested}
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            if is_live_review:
+                                st.markdown("<p style='font-size:0.78rem; font-weight:700; color:#94A3B8; text-transform:uppercase; margin-bottom:6px;'>Employee Approval Actions</p>", unsafe_allow_html=True)
+                                
+                                edit_expander = st.checkbox(f"✏️ Edit response before approving", key=f"urg_edit_chk_{raw_id}")
+                                response_to_approve = current_suggested
+
+                                if edit_expander:
+                                    response_to_approve = st.text_area(
+                                        "Draft Response",
+                                        value=current_suggested,
+                                        height=100,
+                                        key=f"urg_edit_area_{raw_id}",
+                                        label_visibility="collapsed"
+                                    )
+
+                                act_col1, act_col2 = st.columns([1, 1.2])
+
+                                with act_col1:
+                                    if st.button("🔄 Regenerate Suggestion", key=f"urg_regen_btn_{raw_id}", use_container_width=True):
+                                        try:
+                                            topics_list = [t.strip() for t in str(row['Topic']).split(",")]
+                                            new_gen_response = generate_response(
+                                                row['review'],
+                                                row['Sentiment'],
+                                                topics_list,
+                                                row['Priority']
+                                            )
+                                            update_suggested_response(
+                                                review_id=int(raw_id),
+                                                business_id=auth_business_id,
+                                                new_suggested_response=new_gen_response
+                                            )
+                                            st.success("New suggestion generated!")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error regenerating: {str(e)}")
+
+                                with act_col2:
+                                    confirm_approval = st.checkbox("Confirm approval", key=f"urg_confirm_{raw_id}")
+                                    if st.button("✅ Approve Response", key=f"urg_appr_btn_{raw_id}", disabled=not confirm_approval, use_container_width=True):
+                                        if not response_to_approve or not response_to_approve.strip():
+                                            st.error("Cannot approve an empty response.")
+                                        elif not auth_user_id:
+                                            st.error("Authentication required to approve responses.")
+                                        else:
+                                            try:
+                                                approve_review_response(
+                                                    review_id=int(raw_id),
+                                                    business_id=auth_business_id,
+                                                    employee_user_id=int(auth_user_id),
+                                                    approved_response=response_to_approve.strip()
+                                                )
+                                                st.success("High-priority response approved!")
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"Approval failed: {str(e)}")
+                            else:
+                                st.caption("ℹ️ Response approval workflow is active in Live Customer Reviews mode.")
 
         # Business Intelligence Dashboard Metrics
         st.markdown("""
@@ -977,7 +1144,7 @@ if not df.empty:
         </div>
         """, unsafe_allow_html=True)
 
-        filter_col1, filter_col2, filter_col3 = st.columns(3)
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
 
         with filter_col1:
             sentiment_filter = st.selectbox(
@@ -1005,6 +1172,12 @@ if not df.empty:
                 topic_options
             )
 
+        with filter_col4:
+            status_filter = st.selectbox(
+                "Filter by Approval Status",
+                ["All", "Pending Approval", "Approved"]
+            )
+
         filtered_df = final_df.copy()
 
         if sentiment_filter != "All":
@@ -1024,6 +1197,15 @@ if not df.empty:
                 )
             ]
 
+        if status_filter == "Pending Approval":
+            filtered_df = filtered_df[
+                filtered_df["response_status"] == "pending_approval"
+            ]
+        elif status_filter == "Approved":
+            filtered_df = filtered_df[
+                filtered_df["response_status"] == "approved"
+            ]
+
         st.markdown(f"""
         <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:0.9rem; color:#94A3B8;">
@@ -1037,40 +1219,138 @@ if not df.empty:
             use_container_width=True
         )
 
-        # Response Generator Accordion
+        # Response Generator Accordion & Workflow
         st.markdown("""
         <div class="section-header">
             <span class="section-icon">💬</span>
-            <h3 class="section-title">Suggested Customer Resolution Responses</h3>
+            <h3 class="section-title">Customer Resolution & Response Approval Workflow</h3>
         </div>
         """, unsafe_allow_html=True)
+
+        auth_user_id = st.session_state.get("user_id")
 
         for index, row in filtered_df.iterrows():
             prio = row['Priority']
             icon = "🔴" if prio == "High" else ("🟡" if prio == "Medium" else "🔵")
             rev_id = row.get('review_id', index + 1)
-            
-            with st.expander(f"{icon} Review #{rev_id} — {prio} Priority | Topic: {row['Topic']}"):
+            raw_id = row.get('id')  # Real integer PK from SQLite if live reviews
+            status = row.get('response_status', 'pending_approval')
+            is_live_review = (view_mode == "⚡ Live Customer Reviews") and (raw_id is not None)
+
+            status_badge_html = (
+                "<span style='background:rgba(16, 185, 129, 0.2); color:#34D399; border:1px solid rgba(16, 185, 129, 0.4); padding:2px 8px; border-radius:9999px; font-size:0.72rem; font-weight:700;'>✓ APPROVED</span>"
+                if status == "approved"
+                else "<span style='background:rgba(245, 158, 11, 0.2); color:#FBBF24; border:1px solid rgba(245, 158, 11, 0.4); padding:2px 8px; border-radius:9999px; font-size:0.72rem; font-weight:700;'>⏳ PENDING APPROVAL</span>"
+            )
+
+            expander_title = f"{icon} Review #{rev_id} — {prio} Priority | Topic: {row['Topic']} | Status: {'APPROVED' if status == 'approved' else 'PENDING'}"
+
+            with st.expander(expander_title):
                 r_col1, r_col2 = st.columns([1, 1.2])
+
                 with r_col1:
-                    st.markdown("**Customer Review:**")
+                    st.markdown("**Customer Review Feedback:**")
                     st.markdown(f"> *\"{row['review']}\"*")
                     st.markdown(f"""
                     <div style="margin-top:10px;">
                         <span style="font-size:0.8rem; color:#94A3B8;">Sentiment:</span> 
                         <b style="color:#CBD5E1;">{row['Sentiment']}</b> &nbsp;|&nbsp; 
                         <span style="font-size:0.8rem; color:#94A3B8;">Priority:</span> 
-                        <b style="color:#CBD5E1;">{row['Priority']}</b>
+                        <b style="color:#CBD5E1;">{row['Priority']}</b> &nbsp;|&nbsp; 
+                        <span style="font-size:0.8rem; color:#94A3B8;">Status:</span> {status_badge_html}
                     </div>
                     """, unsafe_allow_html=True)
 
+                    if status == "approved":
+                        approved_by_label = row.get("approved_by_username") or f"Employee #{row.get('approved_by', 'ID')}"
+                        approved_at_label = row.get("approved_at") or "Recently"
+                        st.markdown(f"""
+                        <div style="margin-top:12px; padding:10px 14px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.25); border-radius:8px;">
+                            <div style="font-size:0.75rem; color:#34D399; font-weight:700; text-transform:uppercase;">Internal Approval Record</div>
+                            <div style="font-size:0.82rem; color:#E2E8F0; margin-top:2px;">Approved by <strong>{approved_by_label}</strong> on {approved_at_label}</div>
+                            <div style="font-size:0.72rem; color:#94A3B8; margin-top:2px;">(Internal employee resolution sign-off; not dispatched externally)</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
                 with r_col2:
-                    st.markdown("**Suggested Resolution Draft:**")
-                    st.markdown(f"""
-                    <div style="background:rgba(30, 41, 59, 0.4); border:1px solid rgba(139, 92, 246, 0.25); border-radius:10px; padding:12px; font-size:0.92rem; color:#E2E8F0; line-height:1.5;">
-                        {row['Suggested Response']}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    current_suggested = row.get("suggested_response", "")
+                    approved_resp_text = row.get("approved_response")
+
+                    if status == "approved":
+                        st.markdown("**Final Approved Response:**")
+                        st.markdown(f"""
+                        <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.35); border-radius:10px; padding:14px; font-size:0.92rem; color:#E2E8F0; line-height:1.5;">
+                            {approved_resp_text or current_suggested}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("**AI-Generated Suggested Response:**")
+                        st.markdown(f"""
+                        <div style="background:rgba(30, 41, 59, 0.4); border:1px solid rgba(139, 92, 246, 0.25); border-radius:10px; padding:12px; font-size:0.92rem; color:#E2E8F0; line-height:1.5; margin-bottom:12px;">
+                            {current_suggested}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        if is_live_review:
+                            # Actions: Edit, Regenerate, Approve
+                            st.markdown("<p style='font-size:0.78rem; font-weight:700; color:#94A3B8; text-transform:uppercase; margin-bottom:6px;'>Employee Approval Actions</p>", unsafe_allow_html=True)
+                            
+                            edit_expander = st.checkbox(f"✏️ Edit response before approving", key=f"edit_chk_{raw_id}")
+                            response_to_approve = current_suggested
+
+                            if edit_expander:
+                                response_to_approve = st.text_area(
+                                    "Draft Response",
+                                    value=current_suggested,
+                                    height=100,
+                                    key=f"edit_area_{raw_id}",
+                                    label_visibility="collapsed"
+                                )
+
+                            act_col1, act_col2 = st.columns([1, 1.2])
+
+                            with act_col1:
+                                if st.button("🔄 Regenerate Suggestion", key=f"regen_btn_{raw_id}", use_container_width=True):
+                                    try:
+                                        # Use existing response_generator function
+                                        topics_list = [t.strip() for t in str(row['Topic']).split(",")]
+                                        new_gen_response = generate_response(
+                                            row['review'],
+                                            row['Sentiment'],
+                                            topics_list,
+                                            row['Priority']
+                                        )
+                                        update_suggested_response(
+                                            review_id=int(raw_id),
+                                            business_id=auth_business_id,
+                                            new_suggested_response=new_gen_response
+                                        )
+                                        st.success("New suggestion generated!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error regenerating: {str(e)}")
+
+                            with act_col2:
+                                confirm_approval = st.checkbox("Confirm approval", key=f"confirm_{raw_id}")
+                                if st.button("✅ Approve Response", key=f"appr_btn_{raw_id}", disabled=not confirm_approval, use_container_width=True):
+                                    if not response_to_approve or not response_to_approve.strip():
+                                        st.error("Cannot approve an empty response.")
+                                    elif not auth_user_id:
+                                        st.error("Authentication required to approve responses.")
+                                    else:
+                                        try:
+                                            approve_review_response(
+                                                review_id=int(raw_id),
+                                                business_id=auth_business_id,
+                                                employee_user_id=int(auth_user_id),
+                                                approved_response=response_to_approve.strip()
+                                            )
+                                            st.success("Response approved and logged!")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Approval failed: {str(e)}")
+                        else:
+                            st.caption("ℹ️ Response approval workflow is active in Live Customer Reviews mode.")
 
         # Download Section
         st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)

@@ -34,6 +34,7 @@ def get_db_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
     """
     Initialize SQLite schema for multi-tenant businesses, employee users, and reviews.
+    Safely migrates existing reviews tables with response approval workflow fields.
     """
     conn = get_db_connection(db_path)
     try:
@@ -73,15 +74,34 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
                     topic TEXT,
                     priority TEXT,
                     suggested_response TEXT,
+                    response_status TEXT NOT NULL DEFAULT 'pending_approval' CHECK (response_status IN ('pending_approval', 'approved')),
+                    approved_response TEXT,
+                    approved_by INTEGER,
+                    approved_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+                    FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+                    FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
                 );
             """)
+
+            # Safe database migration: check and add missing columns for existing databases
+            cursor = conn.execute("PRAGMA table_info(reviews);")
+            columns = [row["name"] for row in cursor.fetchall()]
+
+            if "response_status" not in columns:
+                conn.execute("ALTER TABLE reviews ADD COLUMN response_status TEXT NOT NULL DEFAULT 'pending_approval';")
+            if "approved_response" not in columns:
+                conn.execute("ALTER TABLE reviews ADD COLUMN approved_response TEXT;")
+            if "approved_by" not in columns:
+                conn.execute("ALTER TABLE reviews ADD COLUMN approved_by INTEGER;")
+            if "approved_at" not in columns:
+                conn.execute("ALTER TABLE reviews ADD COLUMN approved_at TIMESTAMP;")
 
             # Indexes for efficient tenant queries
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_business ON users(business_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_reviews_priority ON reviews(business_id, priority);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(business_id, response_status);")
     finally:
         conn.close()
 
@@ -285,7 +305,11 @@ def save_review(
             "confidence": confidence,
             "topic": topic,
             "priority": priority,
-            "suggested_response": suggested_response
+            "suggested_response": suggested_response,
+            "response_status": "pending_approval",
+            "approved_response": None,
+            "approved_by": None,
+            "approved_at": None
         }
     except sqlite3.IntegrityError as err:
         if "foreign key" in str(err).lower():
@@ -307,13 +331,137 @@ def get_reviews_by_business(business_id: str, db_path: str = DEFAULT_DB_PATH) ->
     try:
         cursor = conn.execute(
             """
-            SELECT * FROM reviews 
-            WHERE business_id = ? 
-            ORDER BY created_at DESC, id DESC
+            SELECT r.*, u.username as approved_by_username 
+            FROM reviews r
+            LEFT JOIN users u ON r.approved_by = u.id
+            WHERE r.business_id = ? 
+            ORDER BY r.created_at DESC, r.id DESC
             """,
             (business_id.strip().lower(),)
         )
         return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def update_suggested_response(
+    review_id: int,
+    business_id: str,
+    new_suggested_response: str,
+    db_path: str = DEFAULT_DB_PATH
+) -> Dict[str, Any]:
+    """
+    Update the AI-suggested response (e.g. upon employee regenerating suggestion).
+    Guards:
+    - Business-level tenant isolation check
+    - Does NOT overwrite an already approved response
+    - Validates non-empty response
+    """
+    if not isinstance(review_id, int):
+        raise ValueError("review_id must be an integer.")
+    if not business_id or not business_id.strip():
+        raise ValueError("business_id cannot be empty.")
+    if not new_suggested_response or not new_suggested_response.strip():
+        raise ValueError("Suggested response cannot be empty.")
+
+    clean_business_id = business_id.strip().lower()
+    clean_response = new_suggested_response.strip()
+
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            cursor = conn.execute(
+                """
+                SELECT id, business_id, response_status, approved_response 
+                FROM reviews 
+                WHERE id = ? AND business_id = ?
+                """,
+                (review_id, clean_business_id)
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("Review not found or unauthorized business access.")
+
+            if row["response_status"] == "approved":
+                raise ValueError("Cannot overwrite suggested response for an already approved review.")
+
+            conn.execute(
+                """
+                UPDATE reviews 
+                SET suggested_response = ? 
+                WHERE id = ? AND business_id = ?
+                """,
+                (clean_response, review_id, clean_business_id)
+            )
+        return {"id": review_id, "suggested_response": clean_response}
+    finally:
+        conn.close()
+
+
+def approve_review_response(
+    review_id: int,
+    business_id: str,
+    employee_user_id: int,
+    approved_response: str,
+    db_path: str = DEFAULT_DB_PATH
+) -> Dict[str, Any]:
+    """
+    Approve an AI-generated or employee-edited response.
+    Guards:
+    - Business-level tenant isolation check
+    - Validates that approved_response is non-empty
+    - Validates employee_user_id exists and belongs to the same business
+    - Records approved_by employee ID, approved_at timestamp, and sets response_status = 'approved'
+    """
+    if not isinstance(review_id, int):
+        raise ValueError("review_id must be an integer.")
+    if not business_id or not business_id.strip():
+        raise ValueError("business_id cannot be empty.")
+    if not isinstance(employee_user_id, int):
+        raise ValueError("employee_user_id must be an integer.")
+    if not approved_response or not approved_response.strip():
+        raise ValueError("Approved response cannot be empty.")
+
+    clean_business_id = business_id.strip().lower()
+    clean_approved_response = approved_response.strip()
+
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            # Verify employee belongs to this business
+            user_cursor = conn.execute(
+                "SELECT id FROM users WHERE id = ? AND business_id = ?",
+                (employee_user_id, clean_business_id)
+            )
+            if not user_cursor.fetchone():
+                raise ValueError("Unauthorized employee or employee does not belong to this business.")
+
+            # Verify review belongs to this business
+            rev_cursor = conn.execute(
+                "SELECT id FROM reviews WHERE id = ? AND business_id = ?",
+                (review_id, clean_business_id)
+            )
+            if not rev_cursor.fetchone():
+                raise ValueError("Review not found or unauthorized business access.")
+
+            conn.execute(
+                """
+                UPDATE reviews 
+                SET response_status = 'approved',
+                    approved_response = ?,
+                    approved_by = ?,
+                    approved_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND business_id = ?
+                """,
+                (clean_approved_response, employee_user_id, review_id, clean_business_id)
+            )
+
+        return {
+            "id": review_id,
+            "response_status": "approved",
+            "approved_response": clean_approved_response,
+            "approved_by": employee_user_id
+        }
     finally:
         conn.close()
 
