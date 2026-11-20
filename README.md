@@ -1,11 +1,5 @@
 # Revio AI – Intelligent Review Analysis and Customer Resolution Assistant
 
-🚀 **Live Demo:** https://revio-ai-review-assistant.streamlit.app/
-
-💻 **GitHub Repository:** https://github.com/kiransree2002/revio-ai-review-assistant
-
----
-
 ## 🔑 Demo Access
 
 Try the live demonstration using the following access links and demo credentials:
