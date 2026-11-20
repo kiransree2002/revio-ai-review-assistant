@@ -6,8 +6,6 @@ Try the live demonstration using the following access links and demo credentials
 
 ### 👤 Employee Dashboard
 - **URL:** https://revio-ai-review-assistant.streamlit.app/
-- **Username:** `demo_employee`
-- **Password:** `demo1234`
 
 *Note: These are demo credentials for exploring review intelligence, real-time analytics, urgent escalation handling, and the internal AI response approval workflow.*
 
