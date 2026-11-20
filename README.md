@@ -4,8 +4,24 @@
 
 💻 **GitHub Repository:** https://github.com/kiransree2002/revio-ai-review-assistant
 
+---
 
-An AI/ML-powered prototype that analyzes customer reviews, identifies sentiment, detects recurring issues, prioritizes urgent complaints, and generates suggested customer responses.
+## 🔑 Demo Access
+
+Try the live demonstration using the following access links and demo credentials:
+
+### 👤 Employee Dashboard
+- **URL:** https://revio-ai-review-assistant.streamlit.app/
+- **Username:** `demo_employee`
+- **Password:** `demo1234`
+
+*Note: These are demo credentials for exploring review intelligence, real-time analytics, urgent escalation handling, and the internal AI response approval workflow.*
+
+### 🌐 Public Customer Review Form
+- **URL:** https://revio-ai-review-assistant.streamlit.app/?page=submit_review&biz=demo-corp
+- **Access:** No login required (embeddable public customer review submission widget).
+
+---
 
 ## Project Overview
 
